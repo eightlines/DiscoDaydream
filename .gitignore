@@ -1,0 +1,12 @@
+.env
+.DS_STORE
+.vscode
+node_modules
+*.log
+dist
+*.*.toe
+daydream_venv/
+daydream/
+streamdiffusionTD/
+__pycache__/
+*.bat
