@@ -1,0 +1,15 @@
+{
+  "name": "mjpegserver",
+  "version": "1.0.0",
+  "description": "WebRTC to mJPEG",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "author": "Brent Marshall",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0",
+    "fluent-ffmpeg": "^2.1.3"
+  }
+}
