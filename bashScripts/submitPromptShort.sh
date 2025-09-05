@@ -15,7 +15,7 @@ response=$(curl -s -X POST \
             "model_id":"streamdiffusion",
             "params":{
                 "model_id":"stabilityai/sd-turbo",
-                "prompt":"origami, pastel paper",
+                "prompt":"crystal, rainbow refractions, laser line highlights, ice cubes with diamond reflections, vector art, synthwave, vaporwave, 3d render, octane render, unreal engine, cinematic lighting, high detail, 8k",
                 "negative_prompt":""
             }
         }' \
@@ -23,4 +23,3 @@ response=$(curl -s -X POST \
 
 echo $response
 
-# "prompt":"crystal, rainbow refractions, laser line highlights, ice cubes with diamond reflections, vector art, synthwave, vaporwave, 3d render, octane render, unreal engine, cinematic lighting, high detail, 8k",
