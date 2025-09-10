@@ -2,6 +2,9 @@
 
 Initial research into the Daydream API and my attempt to get it running as a stream on an ESP32 in LVGL. 
 
+<img src="media/daydream.webp" alt="Daydream Image running on Waveshare Knob" title="Daydream Image running on Waveshare Knob" width="300" />
+
+
 ### Concept
 
 Since Daydream exports as a lower resolution video stream I went looking for a low resolution screen. There are a number of small circular screens that are capable of running on microcontrollers. I figured it could be possible to use this as a desktop dial to alter a Daydream stream or with the removal of some weight as a pendant necklace or pin. The key was getting the Daydream stream into a format that was capable of running on an ESP32. 
