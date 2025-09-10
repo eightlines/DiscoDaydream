@@ -1,15 +1,237 @@
-#include "lcd.h"
-#include "lcd_config.h"
+#include "lcd_bsp.h"
 #include "esp_lcd_sh8601.h"
-#include "driver/ledc.h"
+#include "lcd_config.h"
 #include "cst816.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <esp_heap_caps.h>
+#include "libs/tjpgd3/src/tjpgd.h"
+#include <Arduino.h>
+
+static SemaphoreHandle_t lvgl_mux = NULL; //mutex semaphores
 
 #define LCD_HOST    SPI2_HOST
 #define SH8601_ID   0x86
 #define CO5300_ID   0xff
 
+typedef struct {
+    uint8_t *data;
+    size_t size;
+} downloaded_image_t;
+
 static esp_lcd_panel_io_handle_t amoled_panel_io_handle = NULL; 
 static SemaphoreHandle_t lvgl_mux = NULL;
+
+void drawRedRectangle(void) {
+  lv_obj_t * screen = lv_scr_act();
+  lv_obj_t * rect = lv_obj_create(screen);
+  lv_obj_set_size(rect, 362, 362);
+  lv_obj_set_style_bg_color(rect, lv_color_make(0xFF, 0x00, 0x00), LV_PART_MAIN);
+  lv_obj_center(rect);
+  return;
+}
+
+void drawJPG(void) {
+//   Serial.println("Test");
+  // JDEC jd;
+  // void * work = malloc(3100);
+
+  // if (!work) {
+  //   // Serial.println("Failed to allocate memory for JPEG decoder.");
+  //   return;
+  // }
+
+  // JRESULT = jd_prepare(&jd, [](JDEC* jd, uint8_t* buf, unsigned int len) -> unsigned int {
+  //   static size_t pos = 0;
+  //   if (pos + len > jpgSize) {
+  //     len = jpgSize - pos; // Adjust length to avoid overflow
+  //   }
+
+  //   if (buf && len) {
+  //     memcpy(buf, jpgData + pos, len);
+  //   }
+
+  //   pos += len;
+  //   return len;
+  // }, work, 3100, (void*)jpgData);
+
+  // if (res != JDR_OK) {
+  //   // Serial.printf("Failed to prepare JPEG decoder: %d\n", res);
+  //   free(work);
+  //   return;
+  // }
+
+  // res = jd_decompress(&jd, jpegDrawCallback, 0);
+
+  // if (res != JDR_OK) {
+  //   // Serial.printf("Failed to decompress JPEG image: %d\n", res);
+  // }
+  // free(work);
+
+  // LV_IMG_DECLARE(TESTIMAGE);
+
+  // lv_obj_t *img;
+  // img = lv_img_create(lv_scr_act());
+  // lv_img_set_src(img, &TESTIMAGE);
+  return;
+}
+
+static int jpegDrawCallback(JDEC* jd, void* bitmap, JRECT* rect) {
+  // Cast bitmap to uint16_t* if using RGB565
+  uint16_t* src = (uint16_t*)bitmap;
+  // Serial.printf("Drawing rect: (%d,%d)-(%d,%d)\n", rect->left, rect->top, rect->right, rect->bottom);
+  return 1;
+}
+// static unsigned int tjd_read_bytes_cb(JDEC* jdec, uint8_t* buf, unsigned int len);
+// static unsigned int tjd_write_pixels_cb(JDEC* jdec, void* bitmap, JRECT* rect);
+
+// typedef struct {
+//     const uint8_t* jpeg_data;
+//     size_t jpeg_data_len;
+//     size_t read_pos;
+//     lv_color_t* pixel_buffer; // LVGL color buffer
+//     int x_offset;
+//     int y_offset;
+//     int target_width;
+//     int target_height;
+// } JpegDecodeContext;
+
+// static unsigned int tjd_read_bytes_cb(JDEC* jdec, uint8_t* buf, unsigned int len) {
+//     JpegDecodeContext* ctx = (JpegDecodeContext*)jdec->device;
+//     if (!ctx || ctx->read_pos + len > ctx->jpeg_data_len) {
+//         return 0; // Error or end of data
+//     }
+//     if (buf) {
+//         memcpy(buf, ctx->jpeg_data + ctx->read_pos, len);
+//     }
+//     ctx->read_pos += len;
+//     return len;
+// }
+
+// static unsigned int tjd_write_pixels_cb(JDEC* jdec, void* bitmap, JRECT* rect) {
+//     JpegDecodeContext* ctx = (JpegDecodeContext*)jdec->device;
+
+//     // Calculate destination start and end coordinates within the LVGL buffer
+//     // Make sure we don't write outside the allocated buffer
+//     int start_x = rect->left;
+//     int end_x = rect->right + 1;
+//     int start_y = rect->top;
+//     int end_y = rect->bottom + 1;
+
+//     if (!ctx->pixel_buffer || start_x >= ctx->target_width || start_y >= ctx->target_height) {
+//         return 0; // Buffer not ready or outside bounds
+//     }
+
+//     // The 'bitmap' provided by TJpgDec is typically RGB888 or BGR888.
+//     // We need to convert it to LVGL's color format (e.g., LV_COLOR_RGB565).
+//     uint16_t* pixels = (uint16_t*)bitmap; // Assuming RGB565 by default from TJpgDec output
+
+//     for (int y = start_y; y < end_y; y++) {
+//         if (y >= ctx->target_height) break; // Avoid writing past allocated buffer height
+//         for (int x = start_x; x < end_x; x++) {
+//             if (x >= ctx->target_width) break; // Avoid writing past allocated buffer width
+
+//             // Get the pixel data from TJpgDec's output (usually RGB565 if that's configured,
+//             // otherwise you might need to convert from RGB888/BGR888)
+//             // TJpgDec can directly output RGB565 if configured correctly.
+//             lv_color_t color;
+//             #if LV_COLOR_DEPTH == 16
+//                 // If TJpgDec outputs 16-bit RGB565 directly
+//                 color.full = pixels[(y - start_y) * (end_x - start_x) + (x - start_x)];
+//             #elif LV_COLOR_DEPTH == 32 || LV_COLOR_DEPTH == 24 // Assuming TJpgDec gives RGB888 in 'pixels' for 24/32 depth
+//                 uint8_t r = ((uint8_t*)pixels)[((y - start_y) * (end_x - start_x) + (x - start_x)) * 3 + 0];
+//                 uint8_t g = ((uint8_t*)pixels)[((y - start_y) * (end_x - start_x) + (x - start_x)) * 3 + 1];
+//                 uint8_t b = ((uint8_t*)pixels)[((y - start_y) * (end_x - start_x) + (x - start_x)) * 3 + 2];
+//                 color = lv_color_make(r, g, b);
+//             #else
+//                 // Handle other color depths or ensure TJpgDec outputs the correct format
+//                 // For now, default to assuming TJpgDec outputs something compatible with LV_COLOR_MAKE
+//                 uint8_t r = (pixels[(y - start_y) * (end_x - start_x) + (x - start_x)] >> 11) & 0x1F;
+//                 uint8_t g = (pixels[(y - start_y) * (end_x - start_x) + (x - start_x)] >> 5) & 0x3F;
+//                 uint8_t b = (pixels[(y - start_y) * (end_x - start_x) + (x - start_x)] >> 0) & 0x1F;
+//                 color = lv_color_make(r << 3, g << 2, b << 3); // Convert 565 to 888 for lv_color_make if needed
+//             #endif
+
+//             // Calculate the index in the LVGL buffer
+//             size_t buffer_idx = y * ctx->target_width + x;
+//             ctx->pixel_buffer[buffer_idx] = color;
+//         }
+//     }
+//     return 1; // Return 1 to continue decoding
+// }
+
+// lv_res_t lv_img_decoder_open_jpeg(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc) {
+//     if (dsc->src_type == LV_IMG_SRC_VARIABLE || dsc->src_type == LV_IMG_SRC_UNKNOWN) {
+//         const uint8_t* jpeg_data = (const uint8_t*)dsc->src;
+//         size_t jpeg_data_len = dsc->len;
+
+//         if (jpeg_data == nullptr || jpeg_data_len == 0) {
+//             return LV_RES_INV;
+//         }
+
+//         JDEC jdec;
+//         JpegDecodeContext ctx;
+//         ctx.jpeg_data = jpeg_data;
+//         ctx.jpeg_data_len = jpeg_data_len;
+//         ctx.read_pos = 0;
+//         ctx.pixel_buffer = nullptr; // Will be allocated after header is read
+
+//         // Prepare for decoding - get image info
+//         JRESULT jresult = jd_prepare(&jdec, tjd_read_bytes_cb, (void*)&ctx);
+//         if (jresult != JDR_OK) {
+//             Serial.printf("JPEG jd_prepare failed, error: %d\n", jresult);
+//             return LV_RES_INV;
+//         }
+
+//         // Allocate memory for the decoded pixels
+//         // Assuming RGB565 output from TJpgDec for 16-bit color depth
+//         // If LV_COLOR_DEPTH is 32, you might need to allocate 4 bytes per pixel.
+//         size_t pixel_size_bytes = jdec.width * jdec.height * (LV_COLOR_DEPTH / 8);
+//         ctx.pixel_buffer = (lv_color_t*)malloc(pixel_size_bytes);
+//         if (!ctx.pixel_buffer) {
+//             Serial.println("Failed to allocate memory for decoded JPEG pixels.");
+//             return LV_RES_INV;
+//         }
+//         ctx.target_width = jdec.width;
+//         ctx.target_height = jdec.height;
+
+//         // Decode the JPEG image
+//         jresult = jd_decomp(&jdec, tjd_write_pixels_cb, 0); // Scale factor 0 = 1/1
+//         if (jresult != JDR_OK) {
+//             Serial.printf("JPEG jd_decomp failed, error: %d\n", jresult);
+//             free(ctx.pixel_buffer);
+//             return LV_RES_INV;
+//         }
+
+//         // Fill the LVGL descriptor with the decoded image info
+//         dsc->img_data = (uint8_t*)ctx.pixel_buffer;
+//         dsc->header.w = jdec.width;
+//         dsc->header.h = jdec.height;
+        
+//         // Set the color format based on your LVGL config.
+//         // TJpgDec typically outputs 16-bit RGB565, so LV_IMG_CF_TRUE_COLOR
+//         // is appropriate if LV_COLOR_DEPTH is 16.
+//         // If you configure TJpgDec for 24-bit output, then LV_IMG_CF_TRUE_COLOR_ALPHA
+//         // or LV_IMG_CF_TRUE_COLOR would be used, but generally 16-bit is more common.
+//         #if LV_COLOR_DEPTH == 16
+//             dsc->header.cf = LV_IMG_CF_TRUE_COLOR; // For RGB565
+//         #elif LV_COLOR_DEPTH == 32 // Assuming TJpgDec could output RGB888 or ARGB888
+//             dsc->header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA; // If it has an alpha channel
+//         #else
+//             dsc->header.cf = LV_IMG_CF_UNKNOWN; // Let LVGL figure it out if you're unsure
+//         #endif
+
+//         return LV_RES_OK;
+//     }
+//     return LV_RES_INV;
+// }
+
+// void lv_img_decoder_close_jpeg(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc) {
+//     if (dsc->img_data) {
+//         free((void*)dsc->img_data); // Free the memory allocated for decoded pixels
+//         dsc->img_data = nullptr;
+//     }
+// }
 
 static const sh8601_lcd_init_cmd_t lcd_init_cmds[] = 
 {
@@ -288,7 +510,8 @@ void lcd_init(void) {
     assert(lvgl_mux);
     xTaskCreate(lvgl_port_task, "LVGL", LVGL_TASK_STACK_SIZE, NULL, LVGL_TASK_PRIORITY, NULL);
     if (lvgl_lock(-1)) {
-        drawBox();
+        // drawRedRectangle();
+        drawJPG();
         lvgl_unlock();
     }   
 
@@ -418,14 +641,4 @@ void setUpdutySubdivide(uint16_t duty) {
 
 static void increase_lvgl_tick(void *arg) {
   lv_tick_inc(LVGL_TICK_PERIOD_MS);
-}
-
-void drawBox(void) {
-    lv_obj_t *scr = lv_scr_act();
-
-    lv_obj_t *box = lv_obj_create(scr);
-    lv_obj_set_size(box, 360, 360);
-    lv_obj_center(box);
-    lv_obj_set_style_bg_color(box, lv_color_hex(0xFF0000), 0);
-
 }
