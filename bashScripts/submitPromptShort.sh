@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ./.env
+source ../.env
 
 PIPELINE_ID="pip_qpUgXycjWF6YMeSL"
 STREAM_ID=${1:-"stream-id"}
